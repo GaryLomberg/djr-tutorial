@@ -1,0 +1,19 @@
+* notes 
+
+** webpage
+https://hackernoon.com/110percent-complete-jwt-authentication-with-django-and-react-2020-iejq34ta
+
+** setup
+mkdir django-jwt-react
+cd django-jwt-react
+
+python3 -m venv venv
+. venv/bin/activate
+
+pip install django djangorestframework djangorestframework-simplejwt
+
+django-admin startproject djsr
+
+Django recommends setting up a custom user model that is easier to customise later, below steps handle this
+
+python djsr/manage.py startapp authentication
