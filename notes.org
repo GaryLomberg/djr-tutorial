@@ -223,3 +223,52 @@ urlpatterns = [
     path('token/obtain/', ObtainTokenPairWithColorView.as_view(), name='token_create'),
     path('token/refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),
     ]
+
+** setup react
+*** setup new django app to hold react
+$ cd djsr
+$ python manage.py startapp frontend
+
+Add frontend to installed apps
+create an index.html as the react root
+
+*** setup base template
+**** frontend/index.html
+<!-- djsr/frontend/templates/frontend/index.html -->
+
+<!DOCTYPE html>
+<html>
+{% load static %}
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="{% static 'frontend/style.css' %}">
+    <title>DRF + React = Winning the game</title>
+</head>
+<body>
+    <div id="root" class="content">
+        This will be the base template.
+    </div>
+</body>
+</html>
+
+**** frontend/style.css
+// djsr/fontend/static/frontend/style.css
+
+#root{
+    background-color:rebeccapurple;
+}
+
+
+*** setup urls
+**** djsr/urls.py
+# djsr/djsr/urls.py
+
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include('authentication.urls')),
+    path('', include('frontend.urls'))
+]
