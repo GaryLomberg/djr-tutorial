@@ -3,17 +3,223 @@
 ** webpage
 https://hackernoon.com/110percent-complete-jwt-authentication-with-django-and-react-2020-iejq34ta
 
-** setup
+** setup django
+*** create app and venv
 mkdir django-jwt-react
 cd django-jwt-react
 
 python3 -m venv venv
 . venv/bin/activate
 
+*** install and start proj
 pip install django djangorestframework djangorestframework-simplejwt
 
 django-admin startproject djsr
 
+*** setup custom user
 Django recommends setting up a custom user model that is easier to customise later, below steps handle this
 
 python djsr/manage.py startapp authentication
+
+1. add authentication to installed apps
+2. create custom user model
+3. register custom user in admin
+4. add AUTH_USER_MODEL = "authentication.CustomUser" to settings.py
+
+
+**** settings.py
+# djsr/djsr/settings.py
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'authentication'
+]
+
+# ...
+
+AUTH_USER_MODEL = "authentication.CustomUser"
+**** authentication/models
+# djsr/authentication/models.py
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+class CustomUser(AbstractUser):
+    fav_color = models.CharField(blank=True, max_length=120)
+**** authentication/admin
+# djsr/authentication/admin.py
+from django.contrib import admin
+from .models import CustomUser
+class CustomUserAdmin(admin.ModelAdmin):
+    model = CustomUser
+
+admin.site.register(CustomUser, CustomUserAdmin)
+
+*** makemigrations and create super
+python manage.py makemigrations
+python manage.py migrate
+python manage.py createsuperuser
+
+*** run server
+** setup DRF and DRF-JWT
+*** configure
+add rest framework to settings.py and add it and JWT's config dicts
+**** settings.py
+# djsr/djsr/settings.py
+# Needed for SIMPLE_JWT
+from datetime import timedelta
+# ...
+INSTALLED_APPS = [
+    ... 
+    'rest_framework' # add rest_framework
+]
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),  # 
+}
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=14),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUTH_HEADER_TYPES': ('JWT',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+} 
+*** setup up urls
+add jwt default urls to authentication and import those urls into the main apps urls
+
+**** djsr/urls.py
+# djsr/djsr/urls.py
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include('authentication.urls'))
+]
+**** authentication/urls.py
+# djsr/authentication/urls.py
+from django.urls import path
+from rest_framework_simplejwt import views as jwt_views
+
+urlpatterns = [
+    path('token/obtain/', jwt_views.TokenObtainPairView.as_view(), name='token_create'),  # override sjwt stock token
+    path('token/refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),
+]
+*** test tokens
+curl --header "Content-Type: application/json" -X POST http://127.0.0.1:8000/api/token/obtain/ --data '{"username":"admin","password":"admin"}'
+curl --header "Content-Type: application/json" -X POST http://127.0.0.1:8000/api/token/refresh/ --data '{"refresh":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTU2MTYyMTg0OSwianRpIjoiYmE3OWUxZTEwOWJkNGU3NmI1YWZhNWQ5OTg5MTE0NjgiLCJ1c2VyX2lkIjoxfQ.S7tDJaaymUUNs74Gnt6dX"}'
+*** add details to claim
+**** authentication/serializers.py
+# djsr/authentication/serializers.py
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+
+    @classmethod
+    def get_token(cls, user):
+        token = super(MyTokenObtainPairSerializer, cls).get_token(user)
+
+        # Add custom claims
+        token['fav_color'] = user.fav_color
+        return token
+
+**** authentication/views.py
+# djsr/authentication/views.py
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer
+from rest_framework import permissions
+
+class ObtainTokenPairWithColorView(TokenObtainPairView):
+    permission_classes = (permissions.AllowAny,)
+    serializer_class = MyTokenObtainPairSerializer
+
+**** authentication/urls.py
+# djsr/authentication/urls.py
+from django.urls import path
+from rest_framework_simplejwt import views as jwt_views
+from .views import ObtainTokenPairWithColorView
+urlpatterns = [
+    path('token/obtain/', ObtainTokenPairWithColorView.as_view(), name='token_create'),  
+    path('token/refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),
+]
+** set up new user creation
+*** create custom user serializer
+**** authentication/serializers.py
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework import serializers
+from .models import CustomUser
+# ...
+class CustomUserSerializer(serializers.ModelSerializer):
+    """
+    Currently unused in preference of the below.
+    """
+    email = serializers.EmailField(
+        required=True
+    )
+    username = serializers.CharField()
+    password = serializers.CharField(min_length=8, write_only=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ('email', 'username', 'password')
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        instance = self.Meta.model(**validated_data)  # as long as the fields are the same, we can just use this
+        if password is not None:
+            instance.set_password(password)
+        instance.save()
+        return instance
+*** create custom user viewset
+**** authentication/views.py
+# djsr/authentication/views.py
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework import status, permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .serializers import MyTokenObtainPairSerializer, CustomUserSerializer
+
+class ObtainTokenPairWithColorView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+
+
+class CustomUserCreate(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request, format='json'):
+        serializer = CustomUserSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            if user:
+                json = serializer.data
+                return Response(json, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+*** add the new path to urls
+**** authentication/urls.py
+# djsr/authentication/urls.py
+
+from django.urls import path
+from rest_framework_simplejwt import views as jwt_views
+from .views import ObtainTokenPairWithColorView, CustomUserCreate
+
+urlpatterns = [
+    path('user/create/', CustomUserCreate.as_view(), name="create_user"),
+    path('token/obtain/', ObtainTokenPairWithColorView.as_view(), name='token_create'),
+    path('token/refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),
+    ]
