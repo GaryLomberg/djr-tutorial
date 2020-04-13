@@ -259,7 +259,6 @@ create an index.html as the react root
     background-color:rebeccapurple;
 }
 
-
 *** setup urls
 **** djsr/urls.py
 # djsr/djsr/urls.py
@@ -272,3 +271,113 @@ urlpatterns = [
     path('api/', include('authentication.urls')),
     path('', include('frontend.urls'))
 ]
+** setup react view
+*** create django view to display the index page holding the react root
+**** frontend/views.py
+# djsr/frontend/views.py
+
+from django.shortcuts import render
+
+# Create your views here.
+def index_view(request):
+    return render(request, 'frontend/index.html', context=None)
+
+**** frontend/urls.py
+from django.urls import path
+from django.conf.urls import url
+from .views import index_view
+
+urlpatterns = [
+    path('', index_view), # for the empty url
+    url(r'^.*/$', index_view), # for all other urls
+]
+** install react
+run npm init from root (same folder as .git file)
+- leave default options
+
+create a src directory in the frontend app
+- to hold react components
+
+create a public folder within the frontend/static/frontend folder
+
+add the following line to the bottom of index.html
+<script type="text/javascript" src="{% static 'frontend/public/main.js' %}"></script>
+
+install the following npm packages
+$ npm install --save-dev @babel/core@7.4.5 @babel/preset-env@7.4.5 @babel/preset-react@7.0.0
+
+create a .babelrc file where the package.json file is
+*** .babelrc
+{
+    "presets": ["@babel/preset-env", "@babel/preset-react"]
+}
+
+install webpack and more babel packages
+npm install --save-dev webpack@4.35.0 webpack-cli@3.3.4 babel-loader@8.0.6
+
+create webpack config file
+*** webpack.config.js
+const path = require('path');
+
+module.exports = {
+    mode: "development",
+    entry: path.resolve(__dirname, 'djsr/frontend/src/index.js'),
+    output: {
+        // options related to how webpack emits results
+
+        // where compiled files go
+        path: path.resolve(__dirname, "djsr/frontend/static/frontend/public/"),
+
+        // 127.0.0.1/static/frontend/public/ where files are served from
+        publicPath: "/static/frontend/public/",
+        filename: 'main.js',  // the same one we import in index.html
+    },
+    module: {
+        // configuration regarding modules
+        rules: [
+            {
+                // regex test for js and jsx files
+                test: /\.(js|jsx)?$/,
+                // don't look in the node_modules/ folder
+                exclude: /node_modules/,
+                // for matching files, use the babel-loader
+                use: {
+                    loader: "babel-loader",
+                    options: {presets: ["@babel/env"]}
+                },
+            }
+        ],
+    },
+};
+
+finally, install react@16.8.6
+npm install --save react@16.8.6 react-dom@16.8.6
+
+** begin react development
+create reacts index.js in frontend/src/index.js
+*** frontend/src/index.js
+// djsr/frontend/src/index.js
+
+import React from 'react'
+import {render} from 'react-dom'
+import App from './components/App';
+
+render(<App  />, document.getElementById('root'));
+
+add an app.js file
+*** frontend/src/components/App.js
+// djsr/frontend/src/components/App.js
+
+import React, { Component} from "react";
+
+class App extends Component{
+  render(){
+    return(
+      <div className="site">
+        <h1>Ahhh after 10,000 years I'm free. Time to conquer the Earth!</h1>
+      </div>
+    );
+  }
+}
+
+export default App;
